@@ -5,12 +5,16 @@ This module was developed as a response to Mike Clark's article [“Multiple Co-
 In it, he discusses his approach to calling one grammar from another.  While the approaches make sense to those familiar with grammars (and feels downright obvious when you see how it works), the process is admittedly less intuitive at first.
 Nonetheless, people do [want to mix grammars](https://www.reddit.com/r/rakulang/comments/sex4qa/comment/humrie1/?utm_source=share&utm_medium=web2x&context=3), and this could be a powerful feature for Raku.
 
-This module aims to make the process dirt simple, and expands on his approach.  To use:
+This module originally expanded on Mike's approach, but that had a limitation: the match tree wasn't preserved (only the AST via `make`/`made`).
+After reviewing [Daniel Sockwell's thoughts](https://www.codesections.com/blog/grammatical-actions/) and trying to see if I could mimic his technique without multiple levels of inheritance/composition, I stumbled across a better technique.
+The result?  An absolutely dirt simple way to integrate multiple grammars.
+
+To use:
 
 ```raku
-grammar Foo {
-    use Token::Foreign;
-    
+use Token::Foreign;
+
+grammar Foo does Foreign {
     token foo {
         ...
         <foreign: BarGrammar, BarActions>
@@ -19,20 +23,29 @@ grammar Foo {
 }
 ```
 
-You will not have detailed access to the matches, but the AST will be fully intact and integrated into the main grammar.
-In the above, in `foo`'s action method, you'd access it with `$<foreign>.made`.
-
-If all you want is the match tree, but you are NOT interested in the actions class, this module is not necessary.  You can simply use
+If you don't want the name `foreign` littering your actions code, there are two ways around it. 
+Option one is to rename the token inline: `<newname=.foreign: BarGrammar>`. 
+The second option is create a *method* with the name you'd prefer. 
+This second option has the advantage that you won't need to constantly reinclude the name of the grammar:
 
 ```raku
-    token foo { ... <BarGrammar::TOP> ... }
+grammar Foo does Foreign {
+    method bar { self.foreign: BarGrammar, BarActions }
+    token foo {
+        ...
+        <bar>
+        ...
+    }
+}
 ```
 
-If techniques to allow a full match tree and the actions classes, this module will be updated.
-
 If you are curious how the module works, I have fully documented the code.
+
 ###Version history
 
+ * **v0.2.0** 
+   * Full match tree is provided
+   * Requires mixing in a role
  * **v0.1.0** 
    * First release
 
