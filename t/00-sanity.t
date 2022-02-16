@@ -1,4 +1,5 @@
 use Test;
+use Token::Foreign;
 
 grammar Foo {
     token TOP { <foo>+  }
@@ -10,8 +11,7 @@ class FooActions {
     method foo ($/) { make "*$/*"       }
 }
 
-grammar Bar {
-    use Token::Foreign;
+grammar Bar does Foreign {
     token TOP {
         [
         | <bar>
@@ -25,10 +25,12 @@ class BarActions {
     method TOP ($/) { make $<foreign>».made }
 }
 
-# Some simple tests 
+# Some simple tests
 my $match = Bar.parse: '1aa222bbbb', :actions(BarActions);
 is $match<foreign>.head.Str, 'aa';
+is $match<foreign>.head<foo>.head.Str, 'a';
 is $match<foreign>.tail.Str, 'bbbb';
+is $match<foreign>.tail<foo>.tail.Str, 'b';
 is $match.made.head.Numeric, 2;
 is $match.made.tail.Numeric, 4;
 is $match.made.head.head, '*a*';
