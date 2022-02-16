@@ -1,7 +1,7 @@
 {
   "name": "Token::Foreign",
   "description": "A token to simplify the process of calling one grammar from within another",
-  "version": "0.1",
+  "version": "0.2.0",
   "perl": "6.*",
   "authors": [
     "Matthew “Matéu” Stephen Stuckwisch"
