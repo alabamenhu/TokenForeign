@@ -1,7 +1,11 @@
 use Test;
 use Token::Foreign;
 
-grammar Foo {
+grammar FooGrammar {
+    token TOP { <foo>+  }
+    token foo { <alpha> }
+}
+grammar BazGrammar {
     token TOP { <foo>+  }
     token foo { <alpha> }
 }
@@ -11,11 +15,15 @@ class FooActions {
     method foo ($/) { make "*$/*"       }
 }
 
-grammar Bar does Foreign {
+grammar Bar
+    is extended(FooGrammar, FooActions, :rule<foo>)
+    #is extended(BazGrammar)
+    {
+    #ext-grammar 'foo', FooGrammar, FooActions;
     token TOP {
         [
         | <bar>
-        | <foreign: Foo, FooActions>
+        | <foo>
         ]+
     }
     token bar { <digit> }
@@ -24,16 +32,18 @@ grammar Bar does Foreign {
 class BarActions {
     method TOP ($/) { make $<foreign>».made }
 }
+say Bar.^find_method('foo');
 
 # Some simple tests
 my $match = Bar.parse: '1aa222bbbb', :actions(BarActions);
-is $match<foreign>.head.Str, 'aa';
-is $match<foreign>.head<foo>.head.Str, 'a';
-is $match<foreign>.tail.Str, 'bbbb';
-is $match<foreign>.tail<foo>.tail.Str, 'b';
-is $match.made.head.Numeric, 2;
-is $match.made.tail.Numeric, 4;
-is $match.made.head.head, '*a*';
-is $match.made.tail.tail, '*b*';
+say $match;
+is $match<foo>.head.Str, 'aa';
+is $match<foo>.head<foo>.head.Str, 'a';
+is $match<foo>.tail.Str, 'bbbb';
+is $match<foo>.tail<foo>.tail.Str, 'b';
+#is $match.made.head.Numeric, 2;
+#is $match.made.tail.Numeric, 4;
+#is $match.made.head.head, '*a*';
+#is $match.made.tail.tail, '*b*';
 
 done-testing;

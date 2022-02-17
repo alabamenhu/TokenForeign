@@ -14,35 +14,37 @@ To use:
 ```raku
 use Token::Foreign;
 
+# OPTION A: token added via mixin
 grammar Foo does Foreign {
-    token foo {
-        ...
-        <foreign: BarGrammar, BarActions>
-        ...
-    }
+    token foo  { ... <foreign:     BarGrammar, BarActions> ... }
+    token foo2 { ... <bar=foreign: BarGrammar, BarActions> ... }
 }
+
+# OPTION B: imperative addition via sub call 
+grammar Foo {
+    add-foreign: 'bar', BarGrammar, BarActions;
+    token foo { ... <bar> ... }
+}
+
+# OPTION C: trait with autonaming 
+grammar Foo is extended(BarGrammar, BarActions) {
+    token foo { ... <bar> ... }
+}
+
 ```
 
-If you don't want the name `foreign` littering your actions code, there are two ways around it. 
-Option one is to rename the token inline: `<newname=.foreign: BarGrammar>`. 
-The second option is create a *method* with the name you'd prefer. 
-This second option has the advantage that you won't need to constantly reinclude the name of the grammar:
+Each method has its advantages and disadvantages.  Option A is extremely versatile, but a bit clunkier.
+Option B is a bit less clunky since it provides a named token.  Option C is probably the cleanest. 
+It will automatically geneate the token name by removed the word "Grammar" from the grammar class name as well as any trailing hyphen/underscore (`Perl6Grammar` would become `perl6`, `HTML-Grammar` would become `html`).
 
-```raku
-grammar Foo does Foreign {
-    method bar { self.foreign: BarGrammar, BarActions }
-    token foo {
-        ...
-        <bar>
-        ...
-    }
-}
-```
+Both Options B and C require *compile time* knowledge of the external grammars.  With Option A, you could integrate grammars that are not known until runtime.
 
 If you are curious how the module works, I have fully documented the code.
 
 ###Version history
 
+ * **v0.3.0** 
+   * Access via subs and traits (requires compile time knowledge)
  * **v0.2.0** 
    * Full match tree is provided
    * Requires mixing in a role
