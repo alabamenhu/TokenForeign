@@ -23,26 +23,46 @@ grammar Foo does Foreign {
 # OPTION B: imperative addition via sub call 
 grammar Foo {
     add-foreign: 'bar', BarGrammar, BarActions;
-    token foo { ... <bar> ... }
+    add-foreign: 'baz', BazGrammar, BazActions;
+    token foo { ... <bar> <baz: OtherBazActions> ... }
 }
 
 # OPTION C: trait with autonaming 
-grammar Foo is extended(BarGrammar, BarActions) {
-    token foo { ... <bar> ... }
+grammar Foo 
+    is extended(BarGrammar, BarActions) 
+    is extended(BazGrammar, BazActions) 
+{
+    token foo { ... <bar> <baz: OtherBazActions> ... }
 }
 
+# With OPTION C: specifying actions at parse time
+Foo.parse:
+    :actions(FooActions),
+    :ext-actions{
+        baz => DifferentBazActions,
+        bar => DifferentBarActions
+    }    
 ```
 
-Each method has its advantages and disadvantages.  Option A is extremely versatile, but a bit clunkier.
-Option B is a bit less clunky since it provides a named token.  Option C is probably the cleanest. 
-It will automatically geneate the token name by removed the word "Grammar" from the grammar class name as well as any trailing hyphen/underscore (`Perl6Grammar` would become `perl6`, `HTML-Grammar` would become `html`).
+Each method has its advantages and disadvantages:
 
-Both Options B and C require *compile time* knowledge of the external grammars.  With Option A, you could integrate grammars that are not known until runtime.
+ * Option A is extremely versatile, but a bit clunkier.
+ * Option B is a bit less clunky since it provides an explicitly named token, so your grammars are cleaner.
+ * Option C is designed to be very DWIM.  It will automatically generate the token name by removing the word "Grammar" from the grammar class name as well as any trailing hyphen/underscore (`Perl6Grammar` would become `perl6`, `HTML-Grammar` would become `html`).
 
-If you are curious how the module works, I have fully documented the code.
+Both Options B and C allow you to specify an actions class to use by default.  
+If you want to override that one, just pass an actions class as an argument to the token (e.g. `<foo: ActionClass>`).
+Note that both Options B and C require *compile time* knowledge of the external grammars (actions may be unknown until runtime) -- that's probably not an issue in most cases.  
+With Option A, you could integrate grammars that are not known until runtime.
+
+With Option C, the precedence of actions are inline (`<foo: Actions>`), parse arguments (`.parse: ext-actions{foo => Actions)`), and lastly the trait actions (`is extended(Foo, Actions)`)
+
+If you are curious how the module works, I have tried to fully documented the code.
 
 ###Version history
 
+ * **v0.3.1**
+   * Trait access improved with actions specifiable at `.parse`
  * **v0.3.0** 
    * Access via subs and traits (requires compile time knowledge)
  * **v0.2.0** 

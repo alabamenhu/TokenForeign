@@ -1,5 +1,23 @@
 unit module TokenForeign;
 
+sub grammar-name        { ... }
+sub parse-extended-args { ... }
+
+role Extended {
+    method parse (
+        Str() $str, :$actions, :$args = \(), :$rule = 'TOP',
+        :ext-actions(%*TOKEN-FOREIGN-ACTIONS), *%opts
+    ) { callsame }
+    method subparse (
+        Str() $str, :$actions, :$args = \(), :$rule = 'TOP',
+        :ext-actions(%*TOKEN-FOREIGN-ACTIONS), *%opts
+    ) { callsame }
+    method parsefile (
+        Str() $str, :$actions, :$args = \(), :$rule = 'TOP',
+        :ext-actions(%*TOKEN-FOREIGN-ACTIONS), *%opts
+    ) { callsame }
+}
+
 role Foreign is export {
     #| A method enabling the calling of one grammar from within another
     method foreign (
@@ -12,8 +30,7 @@ role Foreign is export {
 
         # This works because the requirement of calling a method in a grammar parse
         # is that it returns a match object.  It turns out, they aren't very picky
-        # WHERE the match came from (at least, I'm guessing, so long as the .orig
-        # is the same).
+        # WHERE the match came from (even .orig can be different!).
         # Bonus points in that methods mean `<foo=.foreign>` is valid and maintains the
         # match tree (regular tokens will toss out match objects with .syntax)
         $grammar.subparse:
@@ -43,10 +60,62 @@ multi sub ext-grammar ($name, $grammar, $actions?, :$rule = 'TOP', :$args = \(),
         }
 }
 
-multi sub trait_mod:<is> (Mu \grammar, :$extended!) is export {
+multi sub trait_mod:<is> (Mu \base-grammar, :$extended!) is export {
     die 'Trait ‘extended’ only available on grammars'
-        unless grammar.HOW.^name ~~ /Grammar/;
+        unless base-grammar.HOW.^name ~~ /Grammar/;
 
+    # Unfortunately, we can't grab as a $extended as a capture -- at
+    # least not without requiring users to use ugly syntax so we torture
+    # the implementor here and manually process in parse-extended-args
+    my %extended        = parse-extended-args $extended;
+    my $name            = %extended<name>;
+    my $grammar         = %extended<grammar>;
+    my $default-actions = %extended<actions>;
+    my $default-args    = %extended<args>;
+    my $default-rule    = %extended<rule>;
+    my %default-opts    = %extended<opts>;
+
+    # If no name, autogenerate
+    $name = grammar-name $grammar.^name
+        without $name;
+
+    # Add the extended role to set ext-actions if necessary
+    base-grammar.^add_role(Extended)
+        unless base-grammar ~~ Extended;
+
+    # Add a method matching the name
+    note "Making grammar {$grammar.^name} accessible via <$name> in grammar {base-grammar.^name}";
+    base-grammar.^add_method:
+        $name,
+        my method ( :$args, :$actions, :$rule, *%opts ) {
+            $grammar.subparse:
+                self.orig,
+                :pos(self.to),
+                :actions($actions                       !=== Any ?? $actions
+                      !! %*TOKEN-FOREIGN-ACTIONS{$name} !=== Any ?? %*TOKEN-FOREIGN-ACTIONS{$name}
+                      !! $default-actions),
+                :args($args // $default-args),
+                :rule($rule // $default-rule),
+               |%default-opts,
+               |%opts
+        }
+}
+
+sub grammar-name(Str $name) {
+        my @parts = $name.split('::');
+
+        # The format is akin to "Foo::Grammar"
+        return @parts[* - 2].lc
+            if @parts > 1
+            && @parts.tail.lc eq 'grammar';
+
+        # The format is likely akin to "Foo"
+        # "FooGrammar", "Foo-Grammar", "Foo::BarGrammar"
+        @parts.tail.lc ~~ / (.*?) <before <[-_]>? grammar> /;
+        return ~$0
+}
+
+sub parse-extended-args ($extended) {
     my $name;
     my $grammar;
     my $actions;
@@ -57,8 +126,6 @@ multi sub trait_mod:<is> (Mu \grammar, :$extended!) is export {
     if $extended ~~ Grammar {
         $grammar = $extended;
     } elsif $extended ~~ List {
-        # Unfortunately, we can't grab as a capture -- at least not without ugly syntax
-        # so we torture the implementor here and manually process
         for @$extended -> $arg {
             if $arg.isa: Pair {
                 given $arg.key {
@@ -80,22 +147,5 @@ multi sub trait_mod:<is> (Mu \grammar, :$extended!) is export {
     } else {
         die 'Need to pass a grammar to trait ‘extended’';
     }
-
-    without $name {
-        $grammar.^name ~~ / (.*?) <before :i <[-_]>? grammar> /;
-        $name = $0.lc
-    }
-
-    say "Making grammar {$grammar.^name} accessible via <$name> in grammar {grammar.^name}";
-    grammar.^add_method:
-        $name,
-        my method {
-            $grammar.subparse:
-                self.orig,
-                :$actions,
-                :pos(self.to),
-                :$args,
-               #:$rule,
-               #|%opts
-        }
+    return %(:$name, :$grammar, :$actions, :$rule, :$args, :%opts)
 }
